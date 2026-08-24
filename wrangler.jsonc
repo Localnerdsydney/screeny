@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "screeny",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-24",
+  "observability": {
+    "enabled": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "screeny-db",
+      "database_id": "screeny-db-id"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "BUCKET",
+      "bucket_name": "screeny-artwork"
+    }
+  ]
+}
