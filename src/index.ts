@@ -13,7 +13,7 @@ const app = new Hono<{ Bindings: Env }>();
 const uuid = () => crypto.randomUUID();
 
 // ---------------------------------------------------------
-// FRONTEND: Mobile-First SPA Interface (Screeny)
+// FRONTEND: Mobile-First SPA Interface (screensy)
 // ---------------------------------------------------------
 app.get('/', (c) => {
   return c.html(`
@@ -22,7 +22,7 @@ app.get('/', (c) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Screeny - Screen Printing Order Management</title>
+  <title>screensy - Screen Printing Order Management</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/alpinejs" defer></script>
 </head>
@@ -32,8 +32,17 @@ app.get('/', (c) => {
       <!-- Header -->
       <header class="flex justify-between items-center py-4 border-b border-gray-200 mb-6">
         <div>
-          <h1 class="text-2xl font-bold tracking-tight text-indigo-600">Screeny 🎨</h1>
-          <p class="text-xs text-gray-500">Screen Printing Job & Order Manager</p>
+          <h1 class="flex items-center space-x-2">
+            <span class="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center shadow-sm">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                <line x1="8" y1="21" x2="16" y2="21"></line>
+                <line x1="12" y1="17" x2="12" y2="21"></line>
+              </svg>
+            </span>
+            <span class="text-2xl font-bold tracking-tight text-gray-900">screensy</span>
+          </h1>
+          <p class="text-xs text-gray-500 pl-11">Screen Printing Job &amp; Order Manager</p>
         </div>
         <div class="flex items-center space-x-2">
           <template x-if="adminUser">
@@ -202,7 +211,7 @@ app.get('/', (c) => {
           <h2 class="text-lg font-bold">Admin Users</h2>
           <button @click="openNewAdminModal = true" class="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow">＋ Add Admin</button>
         </div>
-        <p class="text-xs text-gray-500">Super users & administrators authorized to manage Screeny.</p>
+        <p class="text-xs text-gray-500">Super users &amp; administrators authorized to manage screensy.</p>
 
         <template x-for="adm in adminUsers" :key="adm.id">
           <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center">
@@ -344,12 +353,26 @@ app.get('/', (c) => {
             </select>
           </div>
           <div>
-            <label class="block font-semibold mb-1">Artwork Front URL / File</label>
-            <input type="text" x-model="newDesign.artwork_front_url" placeholder="https://... (Front Artwork URL)" class="w-full border p-2 rounded-lg">
+            <label class="block font-semibold mb-1">Artwork Front</label>
+            <label class="block cursor-pointer">
+              <span class="flex items-center justify-center gap-2 border-2 border-dashed border-indigo-300 bg-indigo-50 hover:bg-indigo-100 rounded-lg py-3 px-3 text-indigo-700 font-semibold">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <span x-text="uploading.front ? 'Uploading…' : 'Upload Front Artwork'"></span>
+              </span>
+              <input type="file" class="hidden" accept="image/*,.pdf,.ai,.psd,.eps,.svg,.png,.jpg,.jpeg" @change="uploadArtwork('front', $event)">
+            </label>
+            <p x-show="newDesign.artwork_front_url" class="text-[10px] text-green-600 mt-1 truncate">✓ <span x-text="newDesign.artwork_front_url"></span></p>
           </div>
           <div>
-            <label class="block font-semibold mb-1">Artwork Back URL / File</label>
-            <input type="text" x-model="newDesign.artwork_back_url" placeholder="https://... (Back Artwork URL)" class="w-full border p-2 rounded-lg">
+            <label class="block font-semibold mb-1">Artwork Back</label>
+            <label class="block cursor-pointer">
+              <span class="flex items-center justify-center gap-2 border-2 border-dashed border-indigo-300 bg-indigo-50 hover:bg-indigo-100 rounded-lg py-3 px-3 text-indigo-700 font-semibold">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <span x-text="uploading.back ? 'Uploading…' : 'Upload Back Artwork'"></span>
+              </span>
+              <input type="file" class="hidden" accept="image/*,.pdf,.ai,.psd,.eps,.svg,.png,.jpg,.jpeg" @change="uploadArtwork('back', $event)">
+            </label>
+            <p x-show="newDesign.artwork_back_url" class="text-[10px] text-green-600 mt-1 truncate">✓ <span x-text="newDesign.artwork_back_url"></span></p>
           </div>
           <div>
             <label class="block font-semibold mb-1">Colours Used (Admin Only)</label>
@@ -369,7 +392,7 @@ app.get('/', (c) => {
 
     <!-- Footer info -->
     <footer class="text-center text-xs text-gray-400 mt-12">
-      Screeny 2026 - Screen Printing Order Management
+      screensy 2026 - Screen Printing Order Management
     </footer>
   </div>
 
@@ -398,6 +421,7 @@ app.get('/', (c) => {
         newCust: { customer_name: '', default_shipping_address: '', contact_name: '', email: '', phone: '' },
         newAdmin: { name: '', email: '', role: 'admin' },
         newDesign: { customer_id: '', artwork_front_url: '', artwork_back_url: '', colours_used: '', notes: '' },
+        uploading: { front: false, back: false },
 
         async init() {
           await this.checkAuth();
@@ -497,6 +521,28 @@ app.get('/', (c) => {
           this.openNewDesignModal = false;
           this.newDesign = { customer_id: '', artwork_front_url: '', artwork_back_url: '', colours_used: '', notes: '' };
           await this.loadAll();
+        },
+
+        async uploadArtwork(side, event) {
+          const file = event.target.files && event.target.files[0];
+          if (!file) return;
+          this.uploading[side] = true;
+          try {
+            const fd = new FormData();
+            fd.append('file', file);
+            const res = await fetch('/api/upload', { method: 'POST', body: fd });
+            const data = await res.json();
+            if (res.ok && data.url) {
+              if (side === 'front') this.newDesign.artwork_front_url = data.url;
+              else this.newDesign.artwork_back_url = data.url;
+            } else {
+              alert(data.error || 'Upload failed');
+            }
+          } catch (e) {
+            alert('Upload failed');
+          }
+          this.uploading[side] = false;
+          event.target.value = '';
         },
 
         async submitOrder() {
@@ -650,10 +696,10 @@ app.post('/api/customers', async (c) => {
 
     const resend = new Resend(c.env.RESEND_API_KEY);
     await resend.emails.send({
-      from: 'Screeny <orders@mail.screensy.app>',
+      from: 'screensy <orders@mail.screensy.app>',
       to: [body.email],
-      subject: `Welcome to Screeny - Portal Invitation`,
-      html: `<p>Hello ${body.contact_name},</p><p>You have been invited to your client portal on Screeny.</p><p><a href="${c.env.APP_URL || 'https://screensy.app'}/auth/magic?token=${magicToken}">Click here to sign in</a></p>`,
+      subject: `Welcome to screensy - Portal Invitation`,
+      html: `<p>Hello ${body.contact_name},</p><p>You have been invited to your client portal on screensy.</p><p><a href="${c.env.APP_URL || 'https://screensy.app'}/auth/magic?token=${magicToken}">Click here to sign in</a></p>`,
     });
   }
 
@@ -677,10 +723,10 @@ app.post('/api/contacts/:id/resend-invite', async (c) => {
 
   const resend = new Resend(c.env.RESEND_API_KEY);
   await resend.emails.send({
-    from: 'Screeny <orders@mail.screensy.app>',
+    from: 'screensy <orders@mail.screensy.app>',
     to: [contact.email],
-    subject: `Screeny Portal Invitation (Resent)`,
-    html: `<p>Hello ${contact.contact_name},</p><p>Here is your new magic link to access your Screeny client portal.</p><p><a href="${c.env.APP_URL || 'https://screensy.app'}/auth/magic?token=${newToken}">Click here to sign in</a></p>`,
+    subject: `screensy Portal Invitation (Resent)`,
+    html: `<p>Hello ${contact.contact_name},</p><p>Here is your new magic link to access your screensy client portal.</p><p><a href="${c.env.APP_URL || 'https://screensy.app'}/auth/magic?token=${newToken}">Click here to sign in</a></p>`,
   });
 
   return c.json({ success: true });
@@ -695,12 +741,36 @@ app.get('/api/designs', async (c) => {
   return c.json(results);
 });
 
+app.post('/api/upload', async (c) => {
+  const formData = await c.req.formData();
+  const file = formData.get('file');
+  if (!file || typeof file === 'string') {
+    return c.json({ error: 'No file provided' }, 400);
+  }
+  const f = file as File;
+  const key = `designs/${uuid()}-${f.name || 'artwork'}`;
+  await c.env.BUCKET.put(key, f.stream(), { httpMetadata: { contentType: f.type || 'application/octet-stream' } });
+  const url = `${c.env.APP_URL || 'https://screensy.app'}/r2/${key}`;
+  return c.json({ url });
+});
+
+app.get('/r2/*', async (c) => {
+  const key = c.req.param('*') || '';
+  const object = await c.env.BUCKET.get(key);
+  if (!object) return c.notFound();
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set('etag', object.httpEtag);
+  headers.set('Cache-Control', 'public, max-age=31536000');
+  return new Response(object.body, { headers });
+});
+
 app.post('/api/designs', async (c) => {
   const body = await c.req.json();
   const id = uuid();
   await c.env.DB.prepare(
     'INSERT INTO designs (id, customer_id, artwork_front_url, artwork_back_url, colours_used, notes) VALUES (?, ?, ?, ?, ?, ?)'
-  ).bind(id, body.customer_id, body.artwork_front_url || 'https://example.com/front.png', body.artwork_back_url || 'https://example.com/back.png', body.colours_used, body.notes).run();
+  ).bind(id, body.customer_id, body.artwork_front_url || '', body.artwork_back_url || '', body.colours_used, body.notes).run();
   return c.json({ success: true, design_id: id });
 });
 
@@ -807,9 +877,9 @@ app.patch('/api/orders/:id/status', async (c) => {
       const resend = new Resend(c.env.RESEND_API_KEY);
       for (const contact of contacts as any[]) {
         await resend.emails.send({
-          from: 'Screeny <orders@mail.screensy.app>',
+          from: 'screensy <orders@mail.screensy.app>',
           to: [contact.email],
-          subject: `Your Screeny order has shipped! Tracking: ${trackingNumber}`,
+          subject: `Your screensy order has shipped! Tracking: ${trackingNumber}`,
           html: `<p>Hello ${order.customer_name},</p><p>Your order has shipped via courier.</p><p><strong>Tracking Number:</strong> ${trackingNumber}</p>`,
         });
       }
