@@ -12,6 +12,33 @@ const app = new Hono<{ Bindings: Env }>();
 
 const uuid = () => crypto.randomUUID();
 
+async function getCurrentUser(c: any) {
+  const cookie = c.req.header('cookie') || '';
+  const adminMatch = cookie.match(/screeny_admin=([^;]+)/);
+  if (adminMatch) {
+    const email = decodeURIComponent(adminMatch[1]);
+    const { results } = await c.env.DB.prepare('SELECT * FROM admins WHERE email = ?').bind(email).all();
+    if (results[0]) {
+      const admin: any = results[0];
+      return { type: 'admin', email: admin.email, name: admin.name, role: admin.role };
+    }
+  }
+  const custMatch = cookie.match(/screeny_customer=([^;]+)/);
+  if (custMatch) {
+    const email = decodeURIComponent(custMatch[1]);
+    const { results } = await c.env.DB.prepare('SELECT * FROM customer_contacts WHERE email = ?').bind(email).all();
+    if (results[0]) {
+      const contact: any = results[0];
+      return { type: 'customer', email: contact.email, name: contact.contact_name, role: 'customer', customer_id: contact.customer_id };
+    }
+  }
+  return null;
+}
+
+function isAdminUser(user: any) {
+  return user && user.type === 'admin' && (user.role === 'admin' || user.role === 'super_user');
+}
+
 // ---------------------------------------------------------
 // FRONTEND: Mobile-First SPA Interface (screensy)
 // ---------------------------------------------------------
@@ -28,7 +55,37 @@ app.get('/', (c) => {
 </head>
 <body class="bg-gray-50 text-gray-900 font-sans antialiased pb-20">
   <div class="max-w-md mx-auto p-4 min-h-screen flex flex-col justify-between" x-data="screenyApp()">
-    <div>
+    <!-- LOGIN VIEW -->
+    <div x-show="!currentUser" class="min-h-screen flex flex-col items-center justify-center py-8">
+      <div class="w-full max-w-sm">
+        <div class="flex flex-col items-center mb-8">
+          <span class="w-14 h-14 rounded-2xl bg-indigo-600 flex items-center justify-center shadow mb-3">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+              <line x1="8" y1="21" x2="16" y2="21"></line>
+              <line x1="12" y1="17" x2="12" y2="21"></line>
+            </svg>
+          </span>
+          <h1 class="text-2xl font-bold tracking-tight text-gray-900">screensy</h1>
+          <p class="text-xs text-gray-500 mt-1">Sign in to continue</p>
+        </div>
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
+          <div class="flex bg-gray-100 rounded-xl p-1 text-xs font-medium">
+            <button @click="loginMode = 'admin'; loginMessage = ''" :class="loginMode === 'admin' ? 'bg-white shadow text-indigo-600' : 'text-gray-600'" class="flex-1 py-2 rounded-lg">Admin</button>
+            <button @click="loginMode = 'customer'; loginMessage = ''" :class="loginMode === 'customer' ? 'bg-white shadow text-indigo-600' : 'text-gray-600'" class="flex-1 py-2 rounded-lg">Customer</button>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold mb-1">Email address</label>
+            <input type="email" x-model="loginEmail" @keydown.enter="login()" placeholder="you@company.com" class="w-full border p-2.5 rounded-xl text-sm">
+          </div>
+          <button @click="login()" class="w-full bg-indigo-600 text-white py-2.5 rounded-xl font-semibold text-sm" x-text="loginMode === 'admin' ? 'Sign In' : 'Send Magic Link'"></button>
+          <p x-show="loginMessage" class="text-xs text-center" :class="loginError ? 'text-red-600' : 'text-green-600'" x-text="loginMessage"></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- APP VIEW -->
+    <div x-show="currentUser" class="flex-1">
       <!-- Header -->
       <header class="flex justify-between items-center py-4 border-b border-gray-200 mb-6">
         <div>
@@ -45,16 +102,15 @@ app.get('/', (c) => {
           <p class="text-xs text-gray-500 pl-11">Screen Printing Job &amp; Order Manager</p>
         </div>
         <div class="flex items-center space-x-2">
-          <template x-if="adminUser">
+          <template x-if="currentUser">
             <div class="text-right">
-              <span class="block text-xs font-bold text-gray-800" x-text="adminUser.name"></span>
-              <span class="text-[10px] bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full font-semibold" x-text="adminUser.role"></span>
+              <span class="block text-xs font-bold text-gray-800" x-text="currentUser.name"></span>
+              <span class="text-[10px] px-2 py-0.5 rounded-full font-semibold"
+                :class="isAdmin ? 'bg-indigo-100 text-indigo-800' : 'bg-emerald-100 text-emerald-800'"
+                x-text="currentUser.role"></span>
             </div>
           </template>
-          <template x-if="!adminUser">
-            <button @click="openLoginModal = true" class="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg font-semibold">Admin Login</button>
-          </template>
-          <template x-if="adminUser">
+          <template x-if="currentUser">
             <button @click="logout()" class="text-xs bg-gray-200 px-2 py-1 rounded text-gray-700">Logout</button>
           </template>
         </div>
@@ -65,8 +121,8 @@ app.get('/', (c) => {
         <button @click="tab = 'orders'" :class="tab === 'orders' ? 'bg-white text-indigo-600 shadow' : 'text-gray-600'" class="flex-1 py-2 rounded-lg text-center transition">Orders</button>
         <button @click="tab = 'quotes'" :class="tab === 'quotes' ? 'bg-white text-indigo-600 shadow' : 'text-gray-600'" class="flex-1 py-2 rounded-lg text-center transition">Quotes</button>
         <button @click="tab = 'designs'" :class="tab === 'designs' ? 'bg-white text-indigo-600 shadow' : 'text-gray-600'" class="flex-1 py-2 rounded-lg text-center transition">Designs</button>
-        <button @click="tab = 'customers'" :class="tab === 'customers' ? 'bg-white text-indigo-600 shadow' : 'text-gray-600'" class="flex-1 py-2 rounded-lg text-center transition">Clients</button>
-        <button @click="tab = 'admins'" :class="tab === 'admins' ? 'bg-white text-indigo-600 shadow' : 'text-gray-600'" class="flex-1 py-2 rounded-lg text-center transition">Admins</button>
+        <button x-show="isAdmin" @click="tab = 'customers'" :class="tab === 'customers' ? 'bg-white text-indigo-600 shadow' : 'text-gray-600'" class="flex-1 py-2 rounded-lg text-center transition">Clients</button>
+        <button x-show="isAdmin" @click="tab = 'admins'" :class="tab === 'admins' ? 'bg-white text-indigo-600 shadow' : 'text-gray-600'" class="flex-1 py-2 rounded-lg text-center transition">Admins</button>
       </nav>
 
       <!-- ORDERS TAB -->
@@ -100,8 +156,8 @@ app.get('/', (c) => {
             </div>
 
             <div class="flex space-x-2 pt-2 border-t border-gray-100 text-xs">
-              <button x-show="order.payment_status === 'Pending'" @click="markPaid(order.id)" class="bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded font-medium border border-emerald-200">Mark Paid (Bank)</button>
-              <button x-show="order.status !== 'Shipped'" @click="shipOrderPrompt(order.id)" class="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded font-medium border border-indigo-200">Scan QR & Ship</button>
+              <button x-show="isAdmin && order.payment_status === 'Pending'" @click="markPaid(order.id)" class="bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded font-medium border border-emerald-200">Mark Paid (Bank)</button>
+              <button x-show="isAdmin && order.status !== 'Shipped'" @click="shipOrderPrompt(order.id)" class="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded font-medium border border-indigo-200">Scan QR & Ship</button>
             </div>
           </div>
         </template>
@@ -111,7 +167,7 @@ app.get('/', (c) => {
       <div x-show="tab === 'quotes'" class="space-y-4">
         <div class="flex justify-between items-center">
           <h2 class="text-lg font-bold">Quotes & Approvals</h2>
-          <button @click="openNewQuoteModal = true" class="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow">＋ New Quote</button>
+          <button x-show="isAdmin" @click="openNewQuoteModal = true" class="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow">＋ New Quote</button>
         </div>
 
         <template x-for="quote in quotes" :key="quote.id">
@@ -131,8 +187,8 @@ app.get('/', (c) => {
             </div>
             <p class="text-xs text-gray-600">Total Price: <span class="font-bold text-gray-950">$</span><span class="font-bold text-gray-950" x-text="quote.total_price"></span></p>
             <div class="flex space-x-2 pt-2 border-t border-gray-100 text-xs">
-              <button x-show="quote.status === 'Draft'" @click="sendQuote(quote.id)" class="bg-blue-50 text-blue-700 px-2.5 py-1 rounded font-medium">Send to Customer</button>
-              <button x-show="quote.status === 'Sent'" @click="approveQuote(quote.id)" class="bg-green-600 text-white px-2.5 py-1 rounded font-semibold">Approve & Pay Upfront</button>
+              <button x-show="isAdmin && quote.status === 'Draft'" @click="sendQuote(quote.id)" class="bg-blue-50 text-blue-700 px-2.5 py-1 rounded font-medium">Send to Customer</button>
+              <button x-show="isAdmin && quote.status === 'Sent'" @click="approveQuote(quote.id)" class="bg-green-600 text-white px-2.5 py-1 rounded font-semibold">Approve & Pay Upfront</button>
             </div>
           </div>
         </template>
@@ -224,19 +280,6 @@ app.get('/', (c) => {
               x-text="adm.role"></span>
           </div>
         </template>
-      </div>
-    </div>
-
-    <!-- ADMIN LOGIN MODAL -->
-    <div x-show="openLoginModal" class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div class="bg-white rounded-2xl p-6 w-full max-w-sm space-y-4 shadow-xl">
-        <h3 class="font-bold text-lg">Admin Login</h3>
-        <p class="text-xs text-gray-600">Enter your authorized admin email address (e.g. luke@localnerd.com.au).</p>
-        <input type="email" x-model="loginEmail" placeholder="luke@localnerd.com.au" class="w-full border p-2.5 rounded-xl text-xs">
-        <div class="flex space-x-2 pt-2">
-          <button @click="loginAdmin()" class="flex-1 bg-indigo-600 text-white py-2 rounded-xl font-semibold text-xs">Sign In</button>
-          <button @click="openLoginModal = false" class="bg-gray-200 px-4 py-2 rounded-xl font-semibold text-xs">Cancel</button>
-        </div>
       </div>
     </div>
 
@@ -391,7 +434,7 @@ app.get('/', (c) => {
     </div>
 
     <!-- Footer info -->
-    <footer class="text-center text-xs text-gray-400 mt-12">
+    <footer x-show="currentUser" class="text-center text-xs text-gray-400 mt-12">
       screensy 2026 - Screen Printing Order Management
     </footer>
   </div>
@@ -400,13 +443,16 @@ app.get('/', (c) => {
     function screenyApp() {
       return {
         tab: 'orders',
-        adminUser: null,
+        currentUser: null,
+        authLoaded: false,
+        loginMode: 'admin',
+        loginError: false,
+        loginMessage: '',
         orders: [],
         quotes: [],
         designs: [],
         customers: [],
         adminUsers: [],
-        openLoginModal: false,
         openNewOrderModal: false,
         openNewCustomerModal: false,
         openNewQuoteModal: false,
@@ -423,55 +469,87 @@ app.get('/', (c) => {
         newDesign: { customer_id: '', artwork_front_url: '', artwork_back_url: '', colours_used: '', notes: '' },
         uploading: { front: false, back: false },
 
-        async init() {
-          await this.checkAuth();
-          await this.loadAll();
+        get isAdmin() {
+          return this.currentUser && (this.currentUser.role === 'admin' || this.currentUser.role === 'super_user');
         },
 
-        async checkAuth() {
-          const res = await fetch('/api/admin/me');
-          if (res.ok) {
-            const data = await res.json();
-            this.adminUser = data.admin;
+        async init() {
+          await this.checkAuth();
+          if (this.currentUser) {
+            await this.loadAll();
           }
         },
 
-        async loginAdmin() {
-          const res = await fetch('/api/admin/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: this.loginEmail })
-          });
-          const data = await res.json();
-          if (res.ok && data.success) {
-            this.adminUser = data.admin;
-            this.openLoginModal = false;
-            await this.loadAll();
-            alert('Successfully logged in as ' + data.admin.name);
+        async checkAuth() {
+          const res = await fetch('/api/me');
+          if (res.ok) {
+            const data = await res.json();
+            this.currentUser = data.user;
+          }
+          this.authLoaded = true;
+        },
+
+        async login() {
+          const email = (this.loginEmail || '').trim();
+          if (!email) {
+            this.loginError = true;
+            this.loginMessage = 'Please enter your email address.';
+            return;
+          }
+          if (this.loginMode === 'admin') {
+            const res = await fetch('/api/admin/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email })
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+              this.currentUser = { email: data.admin.email, name: data.admin.name, role: data.admin.role, type: 'admin' };
+              this.loginError = false;
+              this.loginMessage = '';
+              await this.loadAll();
+            } else {
+              this.loginError = true;
+              this.loginMessage = data.error || 'Login failed. Unauthorized email.';
+            }
           } else {
-            alert(data.error || 'Login failed. Unauthorized email.');
+            const res = await fetch('/api/customer/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email })
+            });
+            const data = await res.json();
+            this.loginError = !data.success;
+            this.loginMessage = data.success ? 'Magic link sent! Check your email to sign in.' : (data.error || 'No account found.');
           }
         },
 
         async logout() {
-          await fetch('/api/admin/logout', { method: 'POST' });
-          this.adminUser = null;
-          window.location.reload();
+          await fetch('/api/logout', { method: 'POST' });
+          this.currentUser = null;
+          this.orders = [];
+          this.quotes = [];
+          this.designs = [];
+          this.customers = [];
+          this.adminUsers = [];
         },
 
         async loadAll() {
-          const [o, q, d, c, a] = await Promise.all([
+          const fetches = [
             fetch('/api/orders').then(r => r.json()),
             fetch('/api/quotes').then(r => r.json()),
             fetch('/api/designs').then(r => r.json()),
-            fetch('/api/customers').then(r => r.json()),
-            fetch('/api/admin/users').then(r => r.json())
-          ]);
-          this.orders = o;
-          this.quotes = q;
-          this.designs = d;
-          this.customers = c;
-          this.adminUsers = a;
+            fetch('/api/customers').then(r => r.json())
+          ];
+          if (this.isAdmin) {
+            fetches.push(fetch('/api/admin/users').then(r => r.json()));
+          }
+          const results = await Promise.all(fetches);
+          this.orders = results[0];
+          this.quotes = results[1];
+          this.designs = results[2];
+          this.customers = results[3];
+          this.adminUsers = this.isAdmin ? results[4] : [];
         },
 
         async fetchAddresses(custId) {
@@ -608,17 +686,15 @@ app.get('/', (c) => {
 // ---------------------------------------------------------
 // API ROUTES: Admin Auth & Users
 // ---------------------------------------------------------
+app.get('/api/me', async (c) => {
+  const user = await getCurrentUser(c);
+  return c.json({ user });
+});
+
 app.get('/api/admin/me', async (c) => {
-  const cookie = c.req.header('cookie') || '';
-  const match = cookie.match(/screeny_admin=([^;]+)/);
-  if (!match) return c.json({ admin: null }, 401);
-
-  const email = decodeURIComponent(match[1]);
-  const { results } = await c.env.DB.prepare('SELECT * FROM admins WHERE email = ?').bind(email).all();
-  const admin = results[0];
-  if (!admin) return c.json({ admin: null }, 401);
-
-  return c.json({ admin });
+  const user = await getCurrentUser(c);
+  if (user && user.type === 'admin') return c.json({ admin: user });
+  return c.json({ admin: null }, 401);
 });
 
 app.post('/api/admin/login', async (c) => {
@@ -630,9 +706,37 @@ app.post('/api/admin/login', async (c) => {
     return c.json({ error: 'Unauthorized email. Not an admin.' }, 403);
   }
 
-  // Set session cookie
   c.header('Set-Cookie', `screeny_admin=${encodeURIComponent(admin.email)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=86400`);
   return c.json({ success: true, admin });
+});
+
+app.post('/api/customer/login', async (c) => {
+  const { email } = await c.req.json();
+  const { results } = await c.env.DB.prepare('SELECT * FROM customer_contacts WHERE email = ?').bind(email).all();
+  const contact: any = results[0];
+
+  if (!contact) {
+    return c.json({ error: 'No account found for this email.' }, 404);
+  }
+
+  const token = uuid();
+  await c.env.DB.prepare('UPDATE customer_contacts SET magic_token = ? WHERE id = ?').bind(token, contact.id).run();
+
+  const resend = new Resend(c.env.RESEND_API_KEY);
+  await resend.emails.send({
+    from: 'screensy <orders@mail.screensy.app>',
+    to: [contact.email],
+    subject: 'screensy - Your sign in link',
+    html: `<p>Hello ${contact.contact_name},</p><p>Use the link below to sign in to your screensy portal.</p><p><a href="${c.env.APP_URL || 'https://screensy.app'}/auth/magic?token=${token}">Sign in to screensy</a></p>`,
+  });
+
+  return c.json({ success: true, message: 'Magic link sent to your email.' });
+});
+
+app.post('/api/logout', async (c) => {
+  c.header('Set-Cookie', 'screeny_admin=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0', { append: true });
+  c.header('Set-Cookie', 'screeny_customer=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0', { append: true });
+  return c.json({ success: true });
 });
 
 app.post('/api/admin/logout', async (c) => {
@@ -641,22 +745,15 @@ app.post('/api/admin/logout', async (c) => {
 });
 
 app.get('/api/admin/users', async (c) => {
+  const user = await getCurrentUser(c);
+  if (!isAdminUser(user)) return c.json({ error: 'Unauthorized' }, 401);
   const { results } = await c.env.DB.prepare('SELECT id, email, name, role, created_at FROM admins').all();
   return c.json(results);
 });
 
 app.post('/api/admin/users', async (c) => {
-  const cookie = c.req.header('cookie') || '';
-  const match = cookie.match(/screeny_admin=([^;]+)/);
-  if (!match) return c.json({ error: 'Unauthorized' }, 401);
-
-  const email = decodeURIComponent(match[1]);
-  const { results } = await c.env.DB.prepare('SELECT * FROM admins WHERE email = ?').bind(email).all();
-  const currentAdmin: any = results[0];
-
-  if (!currentAdmin || (currentAdmin.role !== 'super_user' && currentAdmin.role !== 'admin')) {
-    return c.json({ error: 'Forbidden. Admin privileges required.' }, 403);
-  }
+  const user = await getCurrentUser(c);
+  if (!isAdminUser(user)) return c.json({ error: 'Forbidden. Admin privileges required.' }, 403);
 
   const body = await c.req.json();
   const id = uuid();
@@ -671,7 +768,16 @@ app.post('/api/admin/users', async (c) => {
 // API ROUTES: Customers, Contacts, Designs, Quotes, Orders
 // ---------------------------------------------------------
 app.get('/api/customers', async (c) => {
-  const { results: customers } = await c.env.DB.prepare('SELECT * FROM customers').all();
+  const user = await getCurrentUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+  let sql = 'SELECT * FROM customers';
+  let bind: any[] = [];
+  if (user.type === 'customer') {
+    sql = 'SELECT * FROM customers WHERE id = ?';
+    bind = [user.customer_id];
+  }
+  const { results: customers } = await c.env.DB.prepare(sql).bind(...bind).all();
   for (const cust of customers) {
     const { results: contacts } = await c.env.DB.prepare('SELECT * FROM customer_contacts WHERE customer_id = ?').bind(cust.id).all();
     cust.contacts = contacts;
@@ -680,6 +786,8 @@ app.get('/api/customers', async (c) => {
 });
 
 app.post('/api/customers', async (c) => {
+  const user = await getCurrentUser(c);
+  if (!isAdminUser(user)) return c.json({ error: 'Forbidden' }, 403);
   const body = await c.req.json();
   const custId = uuid();
   const contactId = uuid();
@@ -713,6 +821,8 @@ app.get('/api/customers/:id/addresses', async (c) => {
 });
 
 app.post('/api/contacts/:id/resend-invite', async (c) => {
+  const user = await getCurrentUser(c);
+  if (!isAdminUser(user)) return c.json({ error: 'Forbidden' }, 403);
   const contactId = c.req.param('id');
   const { results } = await c.env.DB.prepare('SELECT * FROM customer_contacts WHERE id = ?').bind(contactId).all();
   const contact: any = results[0];
@@ -733,11 +843,20 @@ app.post('/api/contacts/:id/resend-invite', async (c) => {
 });
 
 app.get('/api/designs', async (c) => {
-  const { results } = await c.env.DB.prepare(`
+  const user = await getCurrentUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+  let sql = `
     SELECT designs.*, customers.customer_name 
     FROM designs 
     JOIN customers ON designs.customer_id = customers.id
-  `).all();
+  `;
+  let bind: any[] = [];
+  if (user.type === 'customer') {
+    sql += ' WHERE designs.customer_id = ?';
+    bind = [user.customer_id];
+  }
+  const { results } = await c.env.DB.prepare(sql).bind(...bind).all();
   return c.json(results);
 });
 
@@ -775,11 +894,20 @@ app.post('/api/designs', async (c) => {
 });
 
 app.get('/api/quotes', async (c) => {
-  const { results } = await c.env.DB.prepare(`
+  const user = await getCurrentUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+  let sql = `
     SELECT quotes.*, customers.customer_name 
     FROM quotes 
     JOIN customers ON quotes.customer_id = customers.id
-  `).all();
+  `;
+  let bind: any[] = [];
+  if (user.type === 'customer') {
+    sql += ' WHERE quotes.customer_id = ?';
+    bind = [user.customer_id];
+  }
+  const { results } = await c.env.DB.prepare(sql).bind(...bind).all();
   return c.json(results);
 });
 
@@ -823,12 +951,21 @@ app.post('/api/quotes/:id/approve', async (c) => {
 });
 
 app.get('/api/orders', async (c) => {
-  const { results } = await c.env.DB.prepare(`
+  const user = await getCurrentUser(c);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+  let sql = `
     SELECT orders.*, customers.customer_name 
     FROM orders 
     JOIN customers ON orders.customer_id = customers.id
-    ORDER BY orders.created_at DESC
-  `).all();
+  `;
+  let bind: any[] = [];
+  if (user.type === 'customer') {
+    sql += ' WHERE orders.customer_id = ?';
+    bind = [user.customer_id];
+  }
+  sql += ' ORDER BY orders.created_at DESC';
+  const { results } = await c.env.DB.prepare(sql).bind(...bind).all();
   return c.json(results);
 });
 
@@ -849,6 +986,8 @@ app.post('/api/orders', async (c) => {
 });
 
 app.post('/api/orders/:id/mark-paid', async (c) => {
+  const user = await getCurrentUser(c);
+  if (!isAdminUser(user)) return c.json({ error: 'Forbidden' }, 403);
   const orderId = c.req.param('id');
   await c.env.DB.prepare('UPDATE orders SET payment_status = ?, status = ? WHERE id = ?').bind('Paid_Bank_Transfer', 'In Progress', orderId).run();
 
@@ -860,6 +999,8 @@ app.post('/api/orders/:id/mark-paid', async (c) => {
 });
 
 app.patch('/api/orders/:id/status', async (c) => {
+  const user = await getCurrentUser(c);
+  if (!isAdminUser(user)) return c.json({ error: 'Forbidden' }, 403);
   const orderId = c.req.param('id');
   const body = await c.req.json();
   const trackingNumber = body.tracking_number || null;
