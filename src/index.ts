@@ -437,7 +437,7 @@ app.post('/api/customers', async (c) => {
     // Send magic link invite via Resend
     const resend = new Resend(c.env.RESEND_API_KEY);
     await resend.emails.send({
-      from: 'Screeny <orders@resend.dev>',
+      from: 'Screeny <orders@mail.screensy.app>',
       to: [body.email],
       subject: `Welcome to Screeny - Portal Invitation`,
       html: `<p>Hello ${body.contact_name},</p><p>You have been invited to your client portal on Screeny.</p><p><a href="${c.env.APP_URL || 'http://localhost:8787'}/auth/magic?token=${magicToken}">Click here to sign in</a></p>`,
@@ -464,7 +464,7 @@ app.post('/api/contacts/:id/resend-invite', async (c) => {
 
   const resend = new Resend(c.env.RESEND_API_KEY);
   await resend.emails.send({
-    from: 'Screeny <orders@resend.dev>',
+    from: 'Screeny <orders@mail.screensy.app>',
     to: [contact.email],
     subject: `Screeny Portal Invitation (Resent)`,
     html: `<p>Hello ${contact.contact_name},</p><p>Here is your new magic link to access your Screeny client portal.</p><p><a href="${c.env.APP_URL || 'http://localhost:8787'}/auth/magic?token=${newToken}">Click here to sign in</a></p>`,
@@ -599,7 +599,7 @@ app.patch('/api/orders/:id/status', async (c) => {
       const resend = new Resend(c.env.RESEND_API_KEY);
       for (const contact of contacts as any[]) {
         await resend.emails.send({
-          from: 'Screeny <orders@resend.dev>',
+          from: 'Screeny <orders@mail.screensy.app>',
           to: [contact.email],
           subject: `Your Screeny order has shipped! Tracking: ${trackingNumber}`,
           html: `<p>Hello ${order.customer_name},</p><p>Your order has shipped via courier.</p><p><strong>Tracking Number:</strong> ${trackingNumber}</p>`,
