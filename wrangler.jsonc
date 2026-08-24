@@ -3,6 +3,7 @@
   "name": "screeny",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-24",
+  "account_id": "1d15b8f36566d30d9aff04991c8af3f9",
   "observability": {
     "enabled": true
   },
@@ -10,7 +11,7 @@
     {
       "binding": "DB",
       "database_name": "screeny-db",
-      "database_id": "screeny-db-id"
+      "database_id": "6e638373-8835-4929-b721-d30f3cb18297"
     }
   ],
   "r2_buckets": [
