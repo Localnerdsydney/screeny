@@ -329,6 +329,44 @@ app.get('/', (c) => {
       </div>
     </div>
 
+    <!-- NEW DESIGN MODAL -->
+    <div x-show="openNewDesignModal" class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+      <div class="bg-white rounded-2xl p-6 w-full max-w-sm space-y-4 shadow-xl">
+        <h3 class="font-bold text-lg">Upload New Design</h3>
+        <div class="space-y-3 text-xs">
+          <div>
+            <label class="block font-semibold mb-1">Customer</label>
+            <select x-model="newDesign.customer_id" class="w-full border p-2 rounded-lg">
+              <option value="">Select Customer</option>
+              <template x-for="c in customers" :key="c.id">
+                <option :value="c.id" x-text="c.customer_name"></option>
+              </template>
+            </select>
+          </div>
+          <div>
+            <label class="block font-semibold mb-1">Artwork Front URL / File</label>
+            <input type="text" x-model="newDesign.artwork_front_url" placeholder="https://... (Front Artwork URL)" class="w-full border p-2 rounded-lg">
+          </div>
+          <div>
+            <label class="block font-semibold mb-1">Artwork Back URL / File</label>
+            <input type="text" x-model="newDesign.artwork_back_url" placeholder="https://... (Back Artwork URL)" class="w-full border p-2 rounded-lg">
+          </div>
+          <div>
+            <label class="block font-semibold mb-1">Colours Used (Admin Only)</label>
+            <input type="text" x-model="newDesign.colours_used" placeholder="e.g. White, Black, Gold" class="w-full border p-2 rounded-lg">
+          </div>
+          <div>
+            <label class="block font-semibold mb-1">Admin Notes</label>
+            <textarea x-model="newDesign.notes" placeholder="Special print instructions..." class="w-full border p-2 rounded-lg"></textarea>
+          </div>
+        </div>
+        <div class="flex space-x-2 pt-2">
+          <button @click="createDesign()" class="flex-1 bg-indigo-600 text-white py-2 rounded-xl font-semibold">Upload Design</button>
+          <button @click="openNewDesignModal = false" class="bg-gray-200 px-4 py-2 rounded-xl font-semibold">Cancel</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Footer info -->
     <footer class="text-center text-xs text-gray-400 mt-12">
       Screeny 2026 - Screen Printing Order Management
@@ -359,6 +397,7 @@ app.get('/', (c) => {
         newOrder: { customer_id: '', design_id: '', shipping_address: '', custom_shipping: '', total_amount: '' },
         newCust: { customer_name: '', default_shipping_address: '', contact_name: '', email: '', phone: '' },
         newAdmin: { name: '', email: '', role: 'admin' },
+        newDesign: { customer_id: '', artwork_front_url: '', artwork_back_url: '', colours_used: '', notes: '' },
 
         async init() {
           await this.checkAuth();
@@ -447,6 +486,17 @@ app.get('/', (c) => {
             const err = await res.json();
             alert(err.error || 'Failed to create admin.');
           }
+        },
+
+        async createDesign() {
+          await fetch('/api/designs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(this.newDesign)
+          });
+          this.openNewDesignModal = false;
+          this.newDesign = { customer_id: '', artwork_front_url: '', artwork_back_url: '', colours_used: '', notes: '' };
+          await this.loadAll();
         },
 
         async submitOrder() {
